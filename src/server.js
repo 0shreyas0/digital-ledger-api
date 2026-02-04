@@ -13,7 +13,11 @@ const app = express(); // created an express app
 
 if (process.env.NODE_ENV === "production") job.start();
 
+
+import cors from "cors";
+
 // middleware
+app.use(cors());
 app.use(rateLimiter);
 
 app.use(express.json());
