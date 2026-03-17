@@ -16,7 +16,9 @@ const rateLimiter = async (req, res, next) => {
     next();
   } catch (error) {
     console.log("Rate Limit Error", error);
-    next(error);
+    // next(error);
+    next();
+    // If you want rate limiting to be non-critical infrastructure, use next(). If you want the whole API to hard-fail whenever Redis is down, keep next(error). For current app, next() is the correct choice.
   }
 };
 
