@@ -5,7 +5,7 @@ const rateLimiter = async (req, res, next) => {
   // for real world apps, use user based rate limit, i.e. use based on
   // userId or ipAddress as your key.
   try {
-    const { success } = await ratelimit.limit("my-rate-limit");
+    const { success } = await ratelimit.limit("my-rate-limit"); // all users are counted together
 
     if (!success) {
       return res.status(429).json({
