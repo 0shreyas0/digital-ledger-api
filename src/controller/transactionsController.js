@@ -86,8 +86,11 @@ export async function getTransactionsByUserId(req, res) {
 
     res.status(200).json(transactions);
   } catch (error) {
-    console.log("Error getting the transations:", error);
-    res.status(500).json({ message: "Internal server error" });
+    console.log("Error getting the transactions:", error);
+    res.status(500).json({ 
+      message: "Internal server error", 
+      error: error.message // Added for easier debugging on Render
+    });
   }
 }
 
@@ -234,7 +237,10 @@ export async function getSummaryByUserId(req, res) {
 
     res.status(200).json(summaryResult[0]);
   } catch (error) {
-    console.log("Error getting the transation summary:", error);
-    res.status(500).json({ message: "Internal server error" });
+    console.log("Error getting the transaction summary:", error);
+    res.status(500).json({ 
+      message: "Internal server error",
+      error: error.message // Added for easier debugging on Render
+    });
   }
 }
