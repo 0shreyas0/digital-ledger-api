@@ -1,6 +1,8 @@
 import crypto from "crypto";
 import { sql } from "../config/db.js";
 
+const DEFAULT_CATEGORY_ICON = "pricetag-outline";
+
 function normalizeUserDetails({ userId, username, email }) {
   const safeUserId = String(userId).trim();
   const safeEmail = String(email || `${safeUserId}@local.digital-ledger`).trim();
@@ -25,10 +27,10 @@ async function ensureUser({ userId, username, email }) {
   `;
 }
 
-async function ensureCategory({ userId, category, categoryId }) {
+async function ensureCategory({ userId, category, categoryId, icon }) {
   if (categoryId) {
     const categories = await sql`
-      SELECT category_id
+      SELECT category_id, icon
       FROM categories
       WHERE category_id = ${categoryId} AND user_id = ${userId}
     `;
@@ -39,7 +41,7 @@ async function ensureCategory({ userId, category, categoryId }) {
   }
 
   const existingCategories = await sql`
-    SELECT category_id
+    SELECT category_id, icon
     FROM categories
     WHERE user_id = ${userId} AND category = ${category}
     LIMIT 1
@@ -50,10 +52,11 @@ async function ensureCategory({ userId, category, categoryId }) {
   }
 
   const generatedCategoryId = categoryId || `cat_${crypto.randomUUID()}`;
+  const normalizedIcon = String(icon || DEFAULT_CATEGORY_ICON).trim();
 
   await sql`
-    INSERT INTO categories (category_id, category, user_id)
-    VALUES (${generatedCategoryId}, ${category}, ${userId})
+    INSERT INTO categories (category_id, category, user_id, icon)
+    VALUES (${generatedCategoryId}, ${category}, ${userId}, ${normalizedIcon})
   `;
 
   return generatedCategoryId;
@@ -106,6 +109,7 @@ export async function createTransaction(req, res) {
       title,
       type,
       category,
+      category_icon,
       username,
       email,
       user_email,
@@ -144,6 +148,7 @@ export async function createTransaction(req, res) {
       userId: user_id,
       category: normalizedCategory,
       categoryId: category_id,
+      icon: category_icon,
     });
 
     await sql`

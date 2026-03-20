@@ -4,6 +4,7 @@ import { initDB } from "./config/db.js";
 import rateLimiter from "./middleware/rateLimiter.js";
 
 import transactionsRoute from "./routes/transactionsRoute.js";
+import categoriesRoute from "./routes/categoriesRoute.js";
 
 import job from "./config/cron.js";
 
@@ -36,6 +37,7 @@ app.get("/api/health", (req, res) => {
 }); // created a route
 
 app.use("/api/transactions", transactionsRoute);
+app.use("/api/categories", categoriesRoute);
 
 initDB().then(() => {
     app.listen(PORT, () => {

@@ -22,6 +22,16 @@ export async function initDB() {
     `;
 
     await sql`
+      ALTER TABLE categories
+      ADD COLUMN IF NOT EXISTS icon VARCHAR(50) NOT NULL DEFAULT 'pricetag-outline'
+    `;
+
+    await sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS categories_user_id_category_key
+      ON categories (user_id, category)
+    `;
+
+    await sql`
       CREATE TABLE IF NOT EXISTS transactions (
         transaction_id VARCHAR(50) PRIMARY KEY,
         user_id VARCHAR(50) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
