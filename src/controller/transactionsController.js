@@ -74,6 +74,7 @@ export async function getTransactionsByUserId(req, res) {
         t.description AS title,
         t.description,
         c.category,
+        c.icon,
         CASE
           WHEN t.type = 'Expense' THEN -t.amount
           ELSE t.amount
@@ -181,6 +182,7 @@ export async function createTransaction(req, res) {
         t.description AS title,
         t.description,
         c.category,
+        c.icon,
         CASE
           WHEN t.type = 'Expense' THEN -t.amount
           ELSE t.amount
