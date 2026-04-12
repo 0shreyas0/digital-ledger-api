@@ -65,7 +65,17 @@ async function ensureCategory({ userId, category, categoryId, icon }) {
 export async function getTransactionsByUserId(req, res) {
   try {
     const { userId } = req.params;
-    const transactions = await sql`
+    const { 
+      startDate, 
+      endDate, 
+      categories, 
+      minAmount, 
+      maxAmount, 
+      search, 
+      type 
+    } = req.query;
+
+    let queryText = `
       SELECT
         t.transaction_id AS id,
         t.transaction_id,
@@ -84,16 +94,65 @@ export async function getTransactionsByUserId(req, res) {
         t.date
       FROM transactions t
       INNER JOIN categories c ON t.category_id = c.category_id
-      WHERE t.user_id = ${userId}
-      ORDER BY t.date DESC, t.transaction_id DESC
+      WHERE t.user_id = $1
     `;
+
+    const params = [userId];
+    let paramCount = 1;
+
+    if (startDate) {
+      paramCount++;
+      queryText += ` AND t.date >= $${paramCount}`;
+      params.push(startDate);
+    }
+
+    if (endDate) {
+      paramCount++;
+      queryText += ` AND t.date <= $${paramCount}`;
+      params.push(endDate);
+    }
+
+    if (categories) {
+      const categoryList = categories.split(',').map(c => c.trim());
+      paramCount++;
+      queryText += ` AND c.category = ANY($${paramCount})`;
+      params.push(categoryList);
+    }
+
+    if (minAmount) {
+      paramCount++;
+      queryText += ` AND t.amount >= $${paramCount}`;
+      params.push(minAmount);
+    }
+
+    if (maxAmount) {
+      paramCount++;
+      queryText += ` AND t.amount <= $${paramCount}`;
+      params.push(maxAmount);
+    }
+
+    if (search) {
+      paramCount++;
+      queryText += ` AND (t.description ILIKE $${paramCount} OR c.category ILIKE $${paramCount})`;
+      params.push(`%${search}%`);
+    }
+
+    if (type) {
+      paramCount++;
+      queryText += ` AND t.type = $${paramCount}`;
+      params.push(type);
+    }
+
+    queryText += ` ORDER BY t.date DESC, t.transaction_id DESC`;
+
+    const transactions = await sql(queryText, params);
 
     res.status(200).json(transactions);
   } catch (error) {
     console.log("Error getting the transactions:", error);
     res.status(500).json({ 
       message: "Internal server error", 
-      error: error.message // Added for easier debugging on Render
+      error: error.message 
     });
   }
 }
@@ -225,29 +284,81 @@ export async function deleteTransaction(req, res) {
 export async function getSummaryByUserId(req, res) {
   try {
     const { userId } = req.params;
-    const summaryResult = await sql`
+    const { 
+      startDate, 
+      endDate, 
+      categories, 
+      minAmount, 
+      maxAmount, 
+      search, 
+      type 
+    } = req.query;
+
+    let queryText = `
       SELECT
-        COALESCE(SUM(CASE WHEN type = 'Income' THEN amount ELSE 0 END), 0) AS income,
-        COALESCE(SUM(CASE WHEN type = 'Expense' THEN amount ELSE 0 END), 0) AS expenses,
+        COALESCE(SUM(CASE WHEN t.type = 'Income' THEN t.amount ELSE 0 END), 0) AS income,
+        COALESCE(SUM(CASE WHEN t.type = 'Expense' THEN t.amount ELSE 0 END), 0) AS expenses,
         COALESCE(
           SUM(
             CASE
-              WHEN type = 'Income' THEN amount
-              ELSE -amount
+              WHEN t.type = 'Income' THEN t.amount
+              ELSE -t.amount
             END
           ),
           0
         ) AS balance
-      FROM transactions
-      WHERE user_id = ${userId}
+      FROM transactions t
+      INNER JOIN categories c ON t.category_id = c.category_id
+      WHERE t.user_id = $1
     `;
 
+    const params = [userId];
+    let paramCount = 1;
+
+    if (startDate) {
+      paramCount++;
+      queryText += ` AND t.date >= $${paramCount}`;
+      params.push(startDate);
+    }
+    if (endDate) {
+      paramCount++;
+      queryText += ` AND t.date <= $${paramCount}`;
+      params.push(endDate);
+    }
+    if (categories) {
+      const categoryList = categories.split(',').map(c => c.trim());
+      paramCount++;
+      queryText += ` AND c.category = ANY($${paramCount})`;
+      params.push(categoryList);
+    }
+    if (minAmount) {
+      paramCount++;
+      queryText += ` AND t.amount >= $${paramCount}`;
+      params.push(minAmount);
+    }
+    if (maxAmount) {
+      paramCount++;
+      queryText += ` AND t.amount <= $${paramCount}`;
+      params.push(maxAmount);
+    }
+    if (search) {
+      paramCount++;
+      queryText += ` AND (t.description ILIKE $${paramCount} OR c.category ILIKE $${paramCount})`;
+      params.push(`%${search}%`);
+    }
+    if (type) {
+      paramCount++;
+      queryText += ` AND t.type = $${paramCount}`;
+      params.push(type);
+    }
+
+    const summaryResult = await sql(queryText, params);
     res.status(200).json(summaryResult[0]);
   } catch (error) {
     console.log("Error getting the transaction summary:", error);
     res.status(500).json({ 
       message: "Internal server error",
-      error: error.message // Added for easier debugging on Render
+      error: error.message
     });
   }
 }
