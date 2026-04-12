@@ -353,7 +353,15 @@ export async function getSummaryByUserId(req, res) {
     }
 
     const summaryResult = await sql(queryText, params);
-    res.status(200).json(summaryResult[0]);
+    
+    // Fallback to zero values if no result is returned
+    const finalSummary = summaryResult[0] || { 
+      income: 0, 
+      expenses: 0, 
+      balance: 0 
+    };
+
+    res.status(200).json(finalSummary);
   } catch (error) {
     console.log("Error getting the transaction summary:", error);
     res.status(500).json({ 
