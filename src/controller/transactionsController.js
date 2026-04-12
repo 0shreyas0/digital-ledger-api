@@ -75,7 +75,9 @@ export async function getTransactionsByUserId(req, res) {
       type 
     } = req.query;
 
-    let queryText = `
+    console.log(`Fetching transactions for user: ${userId} with filters:`, req.query);
+
+    const transactions = await sql`
       SELECT
         t.transaction_id AS id,
         t.transaction_id,
@@ -94,59 +96,18 @@ export async function getTransactionsByUserId(req, res) {
         t.date
       FROM transactions t
       INNER JOIN categories c ON t.category_id = c.category_id
-      WHERE t.user_id = $1
+      WHERE t.user_id = ${userId}
+      ${startDate ? sql`AND t.date >= ${startDate}` : sql``}
+      ${endDate ? sql`AND t.date <= ${endDate}` : sql``}
+      ${categories ? sql`AND c.category = ANY(${categories.split(',').map(c => c.trim())})` : sql``}
+      ${minAmount ? sql`AND t.amount >= ${minAmount}` : sql``}
+      ${maxAmount ? sql`AND t.amount <= ${maxAmount}` : sql``}
+      ${search ? sql`AND (t.description ILIKE ${`%${search}%`} OR c.category ILIKE ${`%${search}%`})` : sql``}
+      ${type ? sql`AND t.type = ${type}` : sql``}
+      ORDER BY t.date DESC, t.transaction_id DESC
     `;
 
-    const params = [userId];
-    let paramCount = 1;
-
-    if (startDate) {
-      paramCount++;
-      queryText += ` AND t.date >= $${paramCount}`;
-      params.push(startDate);
-    }
-
-    if (endDate) {
-      paramCount++;
-      queryText += ` AND t.date <= $${paramCount}`;
-      params.push(endDate);
-    }
-
-    if (categories) {
-      const categoryList = categories.split(',').map(c => c.trim());
-      paramCount++;
-      queryText += ` AND c.category = ANY($${paramCount})`;
-      params.push(categoryList);
-    }
-
-    if (minAmount) {
-      paramCount++;
-      queryText += ` AND t.amount >= $${paramCount}`;
-      params.push(minAmount);
-    }
-
-    if (maxAmount) {
-      paramCount++;
-      queryText += ` AND t.amount <= $${paramCount}`;
-      params.push(maxAmount);
-    }
-
-    if (search) {
-      paramCount++;
-      queryText += ` AND (t.description ILIKE $${paramCount} OR c.category ILIKE $${paramCount})`;
-      params.push(`%${search}%`);
-    }
-
-    if (type) {
-      paramCount++;
-      queryText += ` AND t.type = $${paramCount}`;
-      params.push(type);
-    }
-
-    queryText += ` ORDER BY t.date DESC, t.transaction_id DESC`;
-
-    const transactions = await sql(queryText, params);
-
+    console.log(`Successfully fetched ${transactions.length} transactions.`);
     res.status(200).json(transactions);
   } catch (error) {
     console.log("Error getting the transactions:", error);
@@ -294,7 +255,9 @@ export async function getSummaryByUserId(req, res) {
       type 
     } = req.query;
 
-    let queryText = `
+    console.log(`Calculating summary for user: ${userId} with filters:`, req.query);
+
+    const summaryResult = await sql`
       SELECT
         COALESCE(SUM(CASE WHEN t.type = 'Income' THEN t.amount ELSE 0 END), 0) AS income,
         COALESCE(SUM(CASE WHEN t.type = 'Expense' THEN t.amount ELSE 0 END), 0) AS expenses,
@@ -309,50 +272,15 @@ export async function getSummaryByUserId(req, res) {
         ) AS balance
       FROM transactions t
       INNER JOIN categories c ON t.category_id = c.category_id
-      WHERE t.user_id = $1
+      WHERE t.user_id = ${userId}
+      ${startDate ? sql`AND t.date >= ${startDate}` : sql``}
+      ${endDate ? sql`AND t.date <= ${endDate}` : sql``}
+      ${categories ? sql`AND c.category = ANY(${categories.split(',').map(c => c.trim())})` : sql``}
+      ${minAmount ? sql`AND t.amount >= ${minAmount}` : sql``}
+      ${maxAmount ? sql`AND t.amount <= ${maxAmount}` : sql``}
+      ${search ? sql`AND (t.description ILIKE ${`%${search}%`} OR c.category ILIKE ${`%${search}%`})` : sql``}
+      ${type ? sql`AND t.type = ${type}` : sql``}
     `;
-
-    const params = [userId];
-    let paramCount = 1;
-
-    if (startDate) {
-      paramCount++;
-      queryText += ` AND t.date >= $${paramCount}`;
-      params.push(startDate);
-    }
-    if (endDate) {
-      paramCount++;
-      queryText += ` AND t.date <= $${paramCount}`;
-      params.push(endDate);
-    }
-    if (categories) {
-      const categoryList = categories.split(',').map(c => c.trim());
-      paramCount++;
-      queryText += ` AND c.category = ANY($${paramCount})`;
-      params.push(categoryList);
-    }
-    if (minAmount) {
-      paramCount++;
-      queryText += ` AND t.amount >= $${paramCount}`;
-      params.push(minAmount);
-    }
-    if (maxAmount) {
-      paramCount++;
-      queryText += ` AND t.amount <= $${paramCount}`;
-      params.push(maxAmount);
-    }
-    if (search) {
-      paramCount++;
-      queryText += ` AND (t.description ILIKE $${paramCount} OR c.category ILIKE $${paramCount})`;
-      params.push(`%${search}%`);
-    }
-    if (type) {
-      paramCount++;
-      queryText += ` AND t.type = $${paramCount}`;
-      params.push(type);
-    }
-
-    const summaryResult = await sql(queryText, params);
     
     // Fallback to zero values if no result is returned
     const finalSummary = summaryResult[0] || { 
@@ -361,6 +289,7 @@ export async function getSummaryByUserId(req, res) {
       balance: 0 
     };
 
+    console.log(`Summary calculated:`, finalSummary);
     res.status(200).json(finalSummary);
   } catch (error) {
     console.log("Error getting the transaction summary:", error);
