@@ -78,33 +78,17 @@ export async function getTransactionsByUserId(req, res) {
     console.log(`Fetching transactions for user: ${userId} with filters:`, req.query);
 
     const transactions = await sql`
-      SELECT
-        t.transaction_id AS id,
-        t.transaction_id,
-        t.user_id,
-        t.category_id,
-        t.description AS title,
-        t.description,
-        c.category,
-        c.icon,
-        CASE
-          WHEN t.type = 'Expense' THEN -t.amount
-          ELSE t.amount
-        END AS amount,
-        t.type,
-        t.date AS created_at,
-        t.date
-      FROM transactions t
-      INNER JOIN categories c ON t.category_id = c.category_id
-      WHERE t.user_id = ${userId}
-      ${startDate ? sql`AND t.date >= ${startDate}` : sql``}
-      ${endDate ? sql`AND t.date <= ${endDate}` : sql``}
-      ${categories ? sql`AND c.category = ANY(${categories.split(',').map(c => c.trim())})` : sql``}
-      ${minAmount ? sql`AND t.amount >= ${minAmount}` : sql``}
-      ${maxAmount ? sql`AND t.amount <= ${maxAmount}` : sql``}
-      ${search ? sql`AND (t.description ILIKE ${`%${search}%`} OR c.category ILIKE ${`%${search}%`})` : sql``}
-      ${type ? sql`AND t.type = ${type}` : sql``}
-      ORDER BY t.date DESC, t.transaction_id DESC
+      SELECT *
+      FROM transaction_details
+      WHERE user_id = ${userId}
+      ${startDate ? sql`AND date >= ${startDate}` : sql``}
+      ${endDate ? sql`AND date <= ${endDate}` : sql``}
+      ${categories ? sql`AND category = ANY(${categories.split(',').map(c => c.trim())})` : sql``}
+      ${minAmount ? sql`AND ABS(amount) >= ${minAmount}` : sql``}
+      ${maxAmount ? sql`AND ABS(amount) <= ${maxAmount}` : sql``}
+      ${search ? sql`AND (description ILIKE ${`%${search}%`} OR category ILIKE ${`%${search}%`})` : sql``}
+      ${type ? sql`AND type = ${type}` : sql``}
+      ORDER BY date DESC, transaction_id DESC
     `;
 
     console.log(`Successfully fetched ${transactions.length} transactions.`);
@@ -194,25 +178,9 @@ export async function createTransaction(req, res) {
     `;
 
     const createdTransactions = await sql`
-      SELECT
-        t.transaction_id AS id,
-        t.transaction_id,
-        t.user_id,
-        t.category_id,
-        t.description AS title,
-        t.description,
-        c.category,
-        c.icon,
-        CASE
-          WHEN t.type = 'Expense' THEN -t.amount
-          ELSE t.amount
-        END AS amount,
-        t.type,
-        t.date AS created_at,
-        t.date
-      FROM transactions t
-      INNER JOIN categories c ON t.category_id = c.category_id
-      WHERE t.transaction_id = ${normalizedTransactionId}
+      SELECT *
+      FROM transaction_details
+      WHERE transaction_id = ${normalizedTransactionId}
     `;
 
     res.status(201).json(createdTransactions[0]);
@@ -259,27 +227,18 @@ export async function getSummaryByUserId(req, res) {
 
     const summaryResult = await sql`
       SELECT
-        COALESCE(SUM(CASE WHEN t.type = 'Income' THEN t.amount ELSE 0 END), 0) AS income,
-        COALESCE(SUM(CASE WHEN t.type = 'Expense' THEN t.amount ELSE 0 END), 0) AS expenses,
-        COALESCE(
-          SUM(
-            CASE
-              WHEN t.type = 'Income' THEN t.amount
-              ELSE -t.amount
-            END
-          ),
-          0
-        ) AS balance
-      FROM transactions t
-      INNER JOIN categories c ON t.category_id = c.category_id
-      WHERE t.user_id = ${userId}
-      ${startDate ? sql`AND t.date >= ${startDate}` : sql``}
-      ${endDate ? sql`AND t.date <= ${endDate}` : sql``}
-      ${categories ? sql`AND c.category = ANY(${categories.split(',').map(c => c.trim())})` : sql``}
-      ${minAmount ? sql`AND t.amount >= ${minAmount}` : sql``}
-      ${maxAmount ? sql`AND t.amount <= ${maxAmount}` : sql``}
-      ${search ? sql`AND (t.description ILIKE ${`%${search}%`} OR c.category ILIKE ${`%${search}%`})` : sql``}
-      ${type ? sql`AND t.type = ${type}` : sql``}
+        COALESCE(SUM(CASE WHEN type = 'Income' THEN ABS(amount) ELSE 0 END), 0) AS income,
+        COALESCE(SUM(CASE WHEN type = 'Expense' THEN ABS(amount) ELSE 0 END), 0) AS expenses,
+        COALESCE(SUM(amount), 0) AS balance
+      FROM transaction_details
+      WHERE user_id = ${userId}
+      ${startDate ? sql`AND date >= ${startDate}` : sql``}
+      ${endDate ? sql`AND date <= ${endDate}` : sql``}
+      ${categories ? sql`AND category = ANY(${categories.split(',').map(c => c.trim())})` : sql``}
+      ${minAmount ? sql`AND ABS(amount) >= ${minAmount}` : sql``}
+      ${maxAmount ? sql`AND ABS(amount) <= ${maxAmount}` : sql``}
+      ${search ? sql`AND (description ILIKE ${`%${search}%`} OR category ILIKE ${`%${search}%`})` : sql``}
+      ${type ? sql`AND type = ${type}` : sql``}
     `;
     
     // Fallback to zero values if no result is returned
