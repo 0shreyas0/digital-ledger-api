@@ -118,6 +118,7 @@ export async function createTransaction(req, res) {
       username,
       email,
       user_email,
+      tag_ids,
     } = req.body;
 
     if (!user_id || amount === undefined || (!description && !title) || !category) {
@@ -176,6 +177,16 @@ export async function createTransaction(req, res) {
         ${normalizedType}
       )
     `;
+
+    if (Array.isArray(tag_ids) && tag_ids.length > 0) {
+      for (const tagId of tag_ids) {
+        await sql`
+          INSERT INTO transaction_tags (transaction_id, tag_id)
+          VALUES (${normalizedTransactionId}, ${tagId})
+          ON CONFLICT DO NOTHING
+        `;
+      }
+    }
 
     const createdTransactions = await sql`
       SELECT *

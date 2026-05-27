@@ -44,6 +44,28 @@ export async function initDB() {
     `;
 
     await sql`
+      CREATE TABLE IF NOT EXISTS tags (
+        tag_id VARCHAR(50) PRIMARY KEY,
+        tag_name VARCHAR(50) NOT NULL,
+        color VARCHAR(7) NOT NULL,
+        user_id VARCHAR(50) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE
+      )
+    `;
+
+    await sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS tags_user_id_tag_name_key
+      ON tags (user_id, tag_name)
+    `;
+
+    await sql`
+      CREATE TABLE IF NOT EXISTS transaction_tags (
+        transaction_id VARCHAR(50) NOT NULL REFERENCES transactions(transaction_id) ON DELETE CASCADE,
+        tag_id VARCHAR(50) NOT NULL REFERENCES tags(tag_id) ON DELETE CASCADE,
+        PRIMARY KEY (transaction_id, tag_id)
+      )
+    `;
+
+    await sql`
       CREATE OR REPLACE VIEW transaction_details AS
       SELECT
         t.transaction_id AS id,
@@ -60,7 +82,14 @@ export async function initDB() {
         END AS amount,
         t.type,
         t.date AS created_at,
-        t.date
+        t.date,
+        COALESCE(
+          (SELECT json_agg(json_build_object('id', tg.tag_id, 'name', tg.tag_name, 'color', tg.color))
+           FROM transaction_tags tt
+           JOIN tags tg ON tt.tag_id = tg.tag_id
+           WHERE tt.transaction_id = t.transaction_id),
+          '[]'::json
+        ) AS tags
       FROM transactions t
       INNER JOIN categories c ON t.category_id = c.category_id
     `;
