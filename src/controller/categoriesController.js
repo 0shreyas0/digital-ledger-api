@@ -161,3 +161,49 @@ export async function deleteCategory(req, res) {
     res.status(500).json({ message: "Internal server error" });
   }
 }
+
+export async function editCategory(req, res) {
+  try {
+    const { categoryId } = req.params;
+    const { user_id, category, icon } = req.body;
+
+    if (!user_id || !categoryId || !category?.trim()) {
+      return res.status(400).json({ message: "Missing required fields." });
+    }
+
+    const normalizedCategory = String(category).trim().slice(0, 50);
+    const normalizedIcon = normalizeIcon(icon);
+
+    const existingCategories = await sql`
+      SELECT category_id
+      FROM categories
+      WHERE user_id = ${user_id} AND LOWER(category) = LOWER(${normalizedCategory}) AND category_id != ${categoryId}
+      LIMIT 1
+    `;
+
+    if (existingCategories.length > 0) {
+      return res.status(409).json({ message: "Category already exists." });
+    }
+
+    const updatedCategories = await sql`
+      UPDATE categories
+      SET category = ${normalizedCategory}, icon = ${normalizedIcon}
+      WHERE category_id = ${categoryId} AND user_id = ${user_id}
+      RETURNING category_id, category, icon
+    `;
+
+    if (updatedCategories.length === 0) {
+      return res.status(404).json({ message: "Category not found." });
+    }
+
+    const updatedCategory = {
+      ...updatedCategories[0],
+      transaction_count: 0 // Will be properly merged in frontend
+    };
+
+    res.status(200).json(updatedCategory);
+  } catch (error) {
+    console.log("Error editing category:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+}
