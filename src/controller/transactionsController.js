@@ -66,33 +66,83 @@ export async function getTransactionsByUserId(req, res) {
   try {
     const { userId } = req.params;
     const { 
-      startDate, 
-      endDate, 
       categories, 
-      minAmount, 
-      maxAmount, 
       search, 
       type,
-      tags
+      tags,
+      matchLogic,
+      dateRanges: dateRangesRaw,
+      amountRanges: amountRangesRaw,
     } = req.query;
 
     console.log(`Fetching transactions for user: ${userId} with filters:`, req.query);
+
+    // Parse array filters
+    let dateRanges = [];
+    let amountRanges = [];
+    try { dateRanges = dateRangesRaw ? JSON.parse(dateRangesRaw) : []; } catch (e) { dateRanges = []; }
+    try { amountRanges = amountRangesRaw ? JSON.parse(amountRangesRaw) : []; } catch (e) { amountRanges = []; }
+
+    // Build date fragment
+    let dateFragment = sql``;
+    if (dateRanges.length > 0) {
+      const dateClauses = dateRanges.map(dr =>
+        sql`(date >= ${dr.start} AND date <= ${dr.end})`
+      );
+      // Combine with OR: (clause1 OR clause2 ...)
+      let combined = dateClauses[0];
+      for (let i = 1; i < dateClauses.length; i++) {
+        combined = sql`${combined} OR ${dateClauses[i]}`;
+      }
+      dateFragment = sql`AND (${combined})`;
+    }
+
+    // Build amount fragment
+    let amountFragment = sql``;
+    if (amountRanges.length > 0) {
+      const amountClauses = amountRanges.map(ar => {
+        if (ar.minAmount && ar.maxAmount) return sql`(ABS(amount) >= ${parseFloat(ar.minAmount)} AND ABS(amount) <= ${parseFloat(ar.maxAmount)})`;
+        if (ar.minAmount) return sql`(ABS(amount) >= ${parseFloat(ar.minAmount)})`;
+        if (ar.maxAmount) return sql`(ABS(amount) <= ${parseFloat(ar.maxAmount)})`;
+        return sql`true`;
+      });
+      let combined = amountClauses[0];
+      for (let i = 1; i < amountClauses.length; i++) {
+        combined = sql`${combined} OR ${amountClauses[i]}`;
+      }
+      amountFragment = sql`AND (${combined})`;
+    }
+
+    // Build taxonomy fragment
+    const hasTaxonomy = categories || type || tags;
+    let taxonomyFragment = sql``;
+    if (hasTaxonomy) {
+      if (matchLogic === 'any') {
+        taxonomyFragment = sql`AND (
+          (${type ? sql`type = ${type}` : sql`false`})
+          OR (${categories ? sql`category = ANY(${categories.split(',').map(c => c.trim())})` : sql`false`})
+          OR (${tags ? sql`EXISTS (SELECT 1 FROM json_to_recordset(tags) AS t(name text) WHERE t.name = ANY(${tags.split(',').map(t => t.trim())}))` : sql`false`})
+        )`;
+      } else {
+        taxonomyFragment = sql`
+          ${type ? sql`AND type = ${type}` : sql``}
+          ${categories ? sql`AND category = ANY(${categories.split(',').map(c => c.trim())})` : sql``}
+          ${tags ? sql`AND EXISTS (
+            SELECT 1 FROM json_to_recordset(tags) AS t(name text)
+            WHERE t.name = ANY(${tags.split(',').map(t => t.trim())})
+          )` : sql``}
+        `;
+      }
+    }
 
     const transactions = await sql`
       SELECT *
       FROM transaction_details
       WHERE user_id = ${userId}
-      ${startDate ? sql`AND date >= ${startDate}` : sql``}
-      ${endDate ? sql`AND date <= ${endDate}` : sql``}
-      ${categories ? sql`AND category = ANY(${categories.split(',').map(c => c.trim())})` : sql``}
-      ${minAmount ? sql`AND ABS(amount) >= ${minAmount}` : sql``}
-      ${maxAmount ? sql`AND ABS(amount) <= ${maxAmount}` : sql``}
+      ${dateFragment}
+      ${amountFragment}
       ${search ? sql`AND (description ILIKE ${`%${search}%`} OR category ILIKE ${`%${search}%`})` : sql``}
-      ${type ? sql`AND type = ${type}` : sql``}
-      ${tags ? sql`AND EXISTS (
-        SELECT 1 FROM json_to_recordset(tags) AS t(name text)
-        WHERE t.name = ANY(${tags.split(',').map(t => t.trim())})
-      )` : sql``}
+      ${taxonomyFragment}
       ORDER BY date DESC, transaction_id DESC
     `;
 
