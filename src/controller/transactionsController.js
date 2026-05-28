@@ -72,7 +72,8 @@ export async function getTransactionsByUserId(req, res) {
       minAmount, 
       maxAmount, 
       search, 
-      type 
+      type,
+      tags
     } = req.query;
 
     console.log(`Fetching transactions for user: ${userId} with filters:`, req.query);
@@ -88,6 +89,10 @@ export async function getTransactionsByUserId(req, res) {
       ${maxAmount ? sql`AND ABS(amount) <= ${maxAmount}` : sql``}
       ${search ? sql`AND (description ILIKE ${`%${search}%`} OR category ILIKE ${`%${search}%`})` : sql``}
       ${type ? sql`AND type = ${type}` : sql``}
+      ${tags ? sql`AND EXISTS (
+        SELECT 1 FROM json_to_recordset(tags) AS t(name text)
+        WHERE t.name = ANY(${tags.split(',').map(t => t.trim())})
+      )` : sql``}
       ORDER BY date DESC, transaction_id DESC
     `;
 
@@ -319,7 +324,8 @@ export async function getSummaryByUserId(req, res) {
       minAmount, 
       maxAmount, 
       search, 
-      type 
+      type,
+      tags
     } = req.query;
 
     console.log(`Calculating summary for user: ${userId} with filters:`, req.query);
@@ -338,6 +344,10 @@ export async function getSummaryByUserId(req, res) {
       ${maxAmount ? sql`AND ABS(amount) <= ${maxAmount}` : sql``}
       ${search ? sql`AND (description ILIKE ${`%${search}%`} OR category ILIKE ${`%${search}%`})` : sql``}
       ${type ? sql`AND type = ${type}` : sql``}
+      ${tags ? sql`AND EXISTS (
+        SELECT 1 FROM json_to_recordset(tags) AS t(name text)
+        WHERE t.name = ANY(${tags.split(',').map(t => t.trim())})
+      )` : sql``}
     `;
     
     // Fallback to zero values if no result is returned
