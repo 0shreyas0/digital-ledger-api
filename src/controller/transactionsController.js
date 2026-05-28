@@ -201,6 +201,94 @@ export async function createTransaction(req, res) {
   }
 }
 
+export async function updateTransaction(req, res) {
+  try {
+    const { id } = req.params;
+    const {
+      user_id,
+      category_id,
+      amount,
+      date,
+      description,
+      title,
+      type,
+      category,
+      category_icon,
+      tag_ids,
+    } = req.body;
+
+    if (!user_id || amount === undefined || (!description && !title) || !category) {
+      return res.status(400).json({
+        message: "user_id, amount, category and title/description are required.",
+      });
+    }
+
+    const parsedAmount = Number.parseFloat(amount);
+    if (Number.isNaN(parsedAmount) || parsedAmount === 0) {
+      return res.status(400).json({ message: "Amount must be a non-zero number." });
+    }
+
+    const normalizedType = type || (parsedAmount < 0 ? "Expense" : "Income");
+    const normalizedAmount = Math.abs(parsedAmount).toFixed(2);
+    const normalizedDescription = String(description || title).trim().slice(0, 250);
+    const normalizedDate = date || new Date().toISOString().slice(0, 10);
+    const normalizedCategory = String(category).trim().slice(0, 50);
+
+    if (!["Income", "Expense"].includes(normalizedType)) {
+      return res.status(400).json({ message: "Type must be Income or Expense." });
+    }
+
+    const normalizedCategoryId = await ensureCategory({
+      userId: user_id,
+      category: normalizedCategory,
+      categoryId: category_id,
+      icon: category_icon,
+    });
+
+    const result = await sql`
+      UPDATE transactions
+      SET
+        category_id = ${normalizedCategoryId},
+        amount = ${normalizedAmount},
+        date = ${normalizedDate},
+        description = ${normalizedDescription},
+        type = ${normalizedType}
+      WHERE transaction_id = ${id} AND user_id = ${user_id}
+      RETURNING transaction_id
+    `;
+
+    if (result.length === 0) {
+      return res.status(404).json({ message: "Transaction not found." });
+    }
+
+    await sql`
+      DELETE FROM transaction_tags
+      WHERE transaction_id = ${id}
+    `;
+
+    if (Array.isArray(tag_ids) && tag_ids.length > 0) {
+      for (const tagId of tag_ids) {
+        await sql`
+          INSERT INTO transaction_tags (transaction_id, tag_id)
+          VALUES (${id}, ${tagId})
+          ON CONFLICT DO NOTHING
+        `;
+      }
+    }
+
+    const updatedTransactions = await sql`
+      SELECT *
+      FROM transaction_details
+      WHERE transaction_id = ${id}
+    `;
+
+    res.status(200).json(updatedTransactions[0]);
+  } catch (error) {
+    console.log("Error updating the transaction:", error);
+    res.status(500).json({ message: "Internal server error", error: error.message });
+  }
+}
+
 export async function deleteTransaction(req, res) {
   try {
     const { id } = req.params;
