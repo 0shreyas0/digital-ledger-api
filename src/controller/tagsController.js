@@ -121,3 +121,55 @@ export async function deleteTag(req, res) {
     res.status(500).json({ message: "Internal server error" });
   }
 }
+
+export async function editTag(req, res) {
+  try {
+    const { tagId } = req.params;
+    const { user_id, tag_name, color } = req.body;
+
+    if (!user_id || !tag_name?.trim()) {
+      return res.status(400).json({ message: "user_id and tag_name are required." });
+    }
+
+    const normalizedTagName = String(tag_name).trim().slice(0, 50);
+    const normalizedColor = String(color || "#3b82f6").trim().slice(0, 7);
+
+    const existingTags = await sql`
+      SELECT tag_id
+      FROM tags
+      WHERE user_id = ${user_id} AND LOWER(tag_name) = LOWER(${normalizedTagName}) AND tag_id != ${tagId}
+      LIMIT 1
+    `;
+
+    if (existingTags.length > 0) {
+      return res.status(409).json({ message: "A tag with this name already exists." });
+    }
+
+    const updatedTags = await sql`
+      UPDATE tags
+      SET tag_name = ${normalizedTagName}, color = ${normalizedColor}
+      WHERE tag_id = ${tagId} AND user_id = ${user_id}
+      RETURNING tag_id, tag_name, color
+    `;
+
+    if (updatedTags.length === 0) {
+      return res.status(404).json({ message: "Tag not found." });
+    }
+
+    // Get current transaction count to return the full object shape
+    const countQuery = await sql`
+      SELECT COUNT(transaction_id)::INT AS transaction_count
+      FROM transaction_tags
+      WHERE tag_id = ${tagId}
+    `;
+
+    res.status(200).json({
+      ...updatedTags[0],
+      transaction_count: countQuery[0].transaction_count
+    });
+  } catch (error) {
+    console.log("Error updating the tag:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+}
+
