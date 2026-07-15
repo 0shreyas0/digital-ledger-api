@@ -6,7 +6,7 @@
   <img src="https://img.shields.io/badge/Cron-Keep_Alive-444?style=for-the-badge" />
 
   <h1>Digital Ledger Backend</h1>
-  <p>Express API for transactions, categories, database initialization, and request protection.</p>
+  <p>Express API for transactions, categories, tags, database initialization, and request protection.</p>
 </div>
 
 ---
@@ -24,11 +24,11 @@
 
 ## Overview
 
-This directory contains the backend API for Digital Ledger. It initializes the database schema, exposes transaction and category endpoints, applies rate limiting, and runs a scheduled keep-alive request in production.
+This directory contains the backend API for Digital Ledger. It initializes the database schema on startup, exposes REST endpoints for transactions, categories, and tags, applies rate limiting, and runs a scheduled keep-alive ping in production.
 
 ## Features
 
-- REST API for transactions and categories
+- REST API for transactions, categories, and tags (full CRUD)
 - Automatic database table creation at startup
 - Neon serverless PostgreSQL integration
 - Upstash Redis rate limiting middleware
@@ -110,20 +110,29 @@ GET /api/health
 - `GET /api/transactions/:userId`
 - `GET /api/transactions/summary/:userId`
 - `POST /api/transactions`
+- `PUT /api/transactions/:id`
 - `DELETE /api/transactions/:id`
 
 ### Categories
 
 - `GET /api/categories/:userId`
 - `POST /api/categories`
+- `PUT /api/categories/:categoryId`
 - `DELETE /api/categories/:categoryId?userId=...`
+
+### Tags
+
+- `GET /api/tags/:userId`
+- `POST /api/tags`
+- `PUT /api/tags/:tagId`
+- `DELETE /api/tags/:tagId`
 
 ## Project Structure
 
 ```text
 src/config/        Database, Upstash, and cron setup
 src/controller/    Route handlers and input normalization
-src/middleware/    Express middleware
+src/middleware/    Express middleware (rate limiting)
 src/routes/        API route definitions
 src/server.js      App bootstrap and server startup
 ```
